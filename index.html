@@ -1,0 +1,921 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>ターゲットキャプチャ - 街歩き探索ゲーム</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <style>
+    button { touch-action: manipulation; }
+    .no-select { user-select: none; -webkit-user-select: none; }
+  </style>
+</head>
+
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col no-select font-sans">
+
+  <!-- ヘッダー -->
+  <header class="bg-slate-800 border-b border-slate-700 px-4 py-3 sticky top-0 z-30 shadow-md">
+    <div class="max-w-md mx-auto flex items-center justify-between">
+      <div>
+        <div class="flex items-center space-x-2">
+          <h1 class="text-lg font-bold text-amber-400 tracking-wide">TARGET CAPTURE</h1>
+          <span id="gps-status-pill" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-700 text-slate-400 border border-slate-600">GPS待機中</span>
+        </div>
+        <p class="text-xs text-slate-400">街歩き探索フィールドゲーム</p>
+      </div>
+      <div>
+        <button onclick="openGMModal()" class="px-2.5 py-1.5 bg-slate-700 hover:bg-slate-600 active:bg-slate-500 rounded text-xs text-slate-200 border border-slate-600 transition">
+          ⚙️ GM設定
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- メイン画面 -->
+  <main class="flex-1 max-w-md w-full mx-auto p-4 flex flex-col justify-between">
+
+    <!-- ================= 1. スタート画面 ================= -->
+    <div id="screen-start" class="flex-1 flex flex-col justify-center items-center text-center space-y-5 py-4">
+      <div class="bg-amber-400/10 p-5 rounded-full border border-amber-400/30 animate-pulse">
+        <span class="text-6xl">🎯</span>
+      </div>
+
+      <div>
+        <h2 class="text-2xl font-black text-white">ターゲットキャプチャ</h2>
+        <p class="text-xs text-slate-300 mt-2 leading-relaxed">
+          写真を手がかりに街を探索せよ！<br>
+          少ないヒントでターゲットに辿り着くほど高得点。<br>
+          <span class="text-amber-400 font-semibold">※お手つき時は当該ヒントptが減少（下限ガード有）</span>
+        </p>
+      </div>
+
+      <!-- 設定サマリー -->
+      <div class="w-full bg-slate-800/80 rounded-xl p-3.5 border border-slate-700 text-left text-xs space-y-2 text-slate-300">
+        <div class="flex justify-between"><span>制限時間:</span><span id="start-disp-time" class="font-bold text-amber-400">20分</span></div>
+        <div class="flex justify-between"><span>登録お題数:</span><span id="start-disp-count" class="font-bold text-amber-400">2問</span></div>
+        <div class="flex justify-between"><span>正解判定距離:</span><span id="start-disp-dist" class="font-bold text-amber-400">半径 25m 以内</span></div>
+        <div class="flex justify-between"><span>GPS接続状況:</span><span id="start-disp-gps" class="font-bold text-slate-400">未接続</span></div>
+      </div>
+
+      <!-- 探索開始ボタン -->
+      <button id="btn-start-game" onclick="startGame()" class="w-full py-4 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 active:scale-95 text-slate-950 font-black text-xl rounded-2xl shadow-lg shadow-amber-500/20 transition transform">
+        🚀 探索を開始する
+      </button>
+    </div>
+
+    <!-- ================= 2. ゲームプレイ画面 ================= -->
+    <div id="screen-game" class="hidden flex-1 flex flex-col space-y-3">
+      <!-- ステータスバー -->
+      <div class="bg-slate-800 rounded-xl p-3 border border-slate-700 flex justify-between items-center shadow">
+        <div>
+          <div class="text-[10px] text-slate-400 uppercase tracking-wider">Time Left</div>
+          <div id="game-timer" class="text-2xl font-black text-amber-400 font-mono">20:00</div>
+        </div>
+        <div class="text-center">
+          <div class="text-[10px] text-slate-400 uppercase tracking-wider">Target</div>
+          <div id="game-target-progress" class="text-lg font-bold text-slate-200">1 / 2</div>
+        </div>
+        <div class="text-right">
+          <div class="text-[10px] text-slate-400 uppercase tracking-wider">Total Score</div>
+          <div id="game-score" class="text-2xl font-black text-emerald-400 font-mono">0 pt</div>
+        </div>
+      </div>
+
+      <!-- 写真・ヒント表示エリア -->
+      <div class="bg-slate-800/90 rounded-2xl p-3.5 border border-slate-700 flex flex-col space-y-2.5 shadow-lg">
+        <div class="flex justify-between items-center">
+          <span id="game-target-title" class="font-bold text-white text-sm">ターゲット #1</span>
+          <span id="game-hint-badge" class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
+            Lv 1 (正解時: +10 pt)
+          </span>
+        </div>
+
+        <div class="relative w-full aspect-square bg-slate-950 rounded-xl overflow-hidden border border-slate-700 flex items-center justify-center">
+          <img id="game-photo-img" src="" alt="ヒント写真" class="w-full h-full object-cover">
+          <div id="game-photo-loading" class="absolute inset-0 bg-slate-900 flex items-center justify-center text-xs text-slate-400">
+            写真を読み込み中...
+          </div>
+        </div>
+
+        <!-- 解放済みヒントタブ -->
+        <div id="game-hint-tabs" class="flex space-x-1.5 overflow-x-auto py-1"></div>
+
+        <button id="btn-next-hint" onclick="revealNextHint()" class="w-full py-2 bg-slate-700 hover:bg-slate-600 active:bg-slate-500 text-slate-200 rounded-xl text-xs font-semibold border border-slate-600 transition flex items-center justify-center space-x-1">
+          <span>🔍 次のヒントを見る</span>
+          <span id="game-next-hint-penalty" class="text-amber-400">(獲得ptが減ります)</span>
+        </button>
+      </div>
+
+      <!-- アクション・GPS判定 -->
+      <div class="space-y-2 pt-1">
+        <button id="btn-check-gps" onclick="checkCurrentLocation()" class="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 active:scale-98 text-white font-black text-lg rounded-2xl shadow-lg shadow-emerald-900/40 transition flex items-center justify-center space-x-2">
+          <span>📍 ここで現在地判定！</span>
+        </button>
+
+        <div id="game-feedback" class="hidden p-2.5 rounded-xl text-xs text-center font-bold border transition"></div>
+
+        <!-- スキップ & ホームへ中断ボタン -->
+        <div class="flex space-x-2">
+          <button onclick="skipTarget()" class="flex-1 py-2 bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-slate-300 hover:text-white rounded-xl text-xs font-medium border border-slate-700 transition flex items-center justify-center space-x-1">
+            <span>⏭️</span><span>スキップ (0pt)</span>
+          </button>
+          <button onclick="abortGame()" class="flex-1 py-2 bg-red-950/40 hover:bg-red-900/60 active:bg-red-800 text-red-300 hover:text-white rounded-xl text-xs font-medium border border-red-800/60 transition flex items-center justify-center space-x-1">
+            <span>🏠</span><span>中断してホームへ</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= 3. リザルト画面 ================= -->
+    <div id="screen-result" class="hidden flex-1 flex flex-col justify-center items-center text-center space-y-6 py-6">
+      <div class="bg-emerald-500/10 p-6 rounded-full border border-emerald-500/30">
+        <span class="text-6xl">🏁</span>
+      </div>
+      <div>
+        <h2 class="text-2xl font-black text-white">GAME FINISHED!</h2>
+        <p class="text-sm text-slate-300 mt-1">探索終了！お疲れ様でした。</p>
+      </div>
+
+      <div class="w-full bg-slate-800 rounded-2xl p-6 border border-slate-700 space-y-4 shadow-xl">
+        <div class="text-xs text-slate-400 uppercase tracking-widest">FINAL SCORE</div>
+        <div id="result-final-score" class="text-5xl font-black text-amber-400 font-mono">0 <span class="text-xl text-slate-300">pt</span></div>
+        <hr class="border-slate-700">
+        <div class="grid grid-cols-3 gap-2 text-xs text-left">
+          <div class="bg-slate-900/50 p-2.5 rounded-lg">
+            <span class="text-slate-400">正解数:</span>
+            <div id="result-clear-count" class="text-base font-bold text-emerald-400">0</div>
+          </div>
+          <div class="bg-slate-900/50 p-2.5 rounded-lg">
+            <span class="text-slate-400">お手つき:</span>
+            <div id="result-miss-count" class="text-base font-bold text-red-400">0 回</div>
+          </div>
+          <div class="bg-slate-900/50 p-2.5 rounded-lg">
+            <span class="text-slate-400">スキップ:</span>
+            <div id="result-skip-count" class="text-base font-bold text-slate-300">0</div>
+          </div>
+        </div>
+      </div>
+
+      <button onclick="resetToTitle()" class="w-full py-3.5 bg-slate-700 hover:bg-slate-600 active:scale-95 text-white font-bold rounded-xl transition">
+        🔄 タイトルに戻る
+      </button>
+    </div>
+
+  </main>
+
+  <!-- ================= 4. GM設定モーダル ================= -->
+  <div id="modal-gm" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-3 overflow-y-auto">
+    <div class="bg-slate-800 border border-slate-700 w-full max-w-lg rounded-2xl p-4 sm:p-5 space-y-4 text-slate-200 max-h-[92vh] flex flex-col shadow-2xl">
+      
+      <div class="flex justify-between items-center border-b border-slate-700 pb-3">
+        <h3 class="font-bold text-white flex items-center space-x-2 text-sm sm:text-base">
+          <span>⚙️ GM・お題編集メニュー</span>
+        </h3>
+        <button onclick="closeGMModal()" class="text-slate-400 hover:text-white text-lg font-bold">✕</button>
+      </div>
+
+      <div class="overflow-y-auto flex-1 space-y-4 pr-1 text-xs">
+        <!-- 基本ルール設定 -->
+        <div class="space-y-3 bg-slate-900/60 p-3 rounded-xl border border-slate-700/60">
+          <div class="font-bold text-slate-100">基本ルール設定</div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-[11px] text-slate-400 mb-1">制限時間 (分)</label>
+              <input type="number" id="gm-input-time" value="20" min="1" max="180" class="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white font-bold">
+            </div>
+            <div>
+              <label class="block text-[11px] text-slate-400 mb-1">正解許容距離 (m)</label>
+              <input type="number" id="gm-input-dist" value="25" min="5" max="200" class="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white font-bold">
+            </div>
+          </div>
+        </div>
+
+        <!-- お題一覧 -->
+        <div class="space-y-3">
+          <div class="flex justify-between items-center">
+            <span class="font-bold text-slate-100">登録お題一覧 (<span id="gm-target-count">2</span>件)</span>
+            <button onclick="addNewTargetForm()" class="px-2.5 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded text-xs transition">
+              + お題を追加
+            </button>
+          </div>
+          <div id="gm-target-list" class="space-y-4"></div>
+        </div>
+
+        <!-- データ入出力 -->
+        <div class="pt-2 border-t border-slate-700 space-y-2">
+          <div class="font-bold text-slate-300">データ配布・共有</div>
+          <div class="grid grid-cols-2 gap-2">
+            <button onclick="exportDataJSON()" class="py-2 bg-slate-700 hover:bg-slate-600 rounded text-xs font-semibold">
+              📥 JSONを書き出す
+            </button>
+            <label class="py-2 bg-slate-700 hover:bg-slate-600 rounded text-xs font-semibold text-center cursor-pointer block">
+              📤 JSONを読み込む
+              <input type="file" accept=".json" onchange="importDataJSON(event)" class="hidden">
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="border-t border-slate-700 pt-3">
+        <button onclick="saveGMSettings()" class="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl transition">
+          設定を保存して閉じる
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- JavaScript ロジック -->
+  <script>
+    // =================================================================
+    // 1. Plus Code 完全デコーダー
+    // =================================================================
+    const OLC_ALPHABET = "23456789CFGHJMPQRVWX";
+
+    const JAPAN_PREFIXES = [
+      "8Q7X", "8Q7W", "8Q8X", "8Q63", "8Q62", "8Q52", "8R9V", "8VC6", "8Q3P"
+    ];
+
+    function decodeFullCode(cleanCode) {
+      const code = cleanCode.replace(/\+/g, '').toUpperCase();
+      if (code.length < 8) return null;
+
+      const vals = [];
+      for (let i = 0; i < code.length; i++) {
+        const idx = OLC_ALPHABET.indexOf(code[i]);
+        if (idx === -1) return null;
+        vals.push(idx);
+      }
+
+      let latRes = 20.0;
+      let lngRes = 20.0;
+      let latNorth = -90.0;
+      let lngWest = -180.0;
+
+      for (let i = 0; i < Math.min(vals.length, 10); i += 2) {
+        latNorth += vals[i] * latRes;
+        lngWest += vals[i + 1] * lngRes;
+        if (i < 8) {
+          latRes /= 20.0;
+          lngRes /= 20.0;
+        }
+      }
+
+      return {
+        lat: parseFloat((latNorth + latRes / 2.0).toFixed(6)),
+        lng: parseFloat((lngWest + lngRes / 2.0).toFixed(6))
+      };
+    }
+
+    function parseAndDecodePlusCode(inputStr) {
+      if (!inputStr) return null;
+
+      const match = inputStr.toUpperCase().match(/([23456789CFGHJMPQRVWX]{4,8})\+([23456789CFGHJMPQRVWX]{2,3})/);
+      if (!match) return null;
+
+      const part1 = match[1];
+      const part2 = match[2];
+
+      if (part1.length >= 8) {
+        const res = decodeFullCode(part1 + part2);
+        if (res) return { ...res, formattedCode: `${part1}+${part2}` };
+      }
+
+      const refLat = (currentLocation.lat !== null) ? currentLocation.lat : 35.3786;
+      const refLng = (currentLocation.lng !== null) ? currentLocation.lng : 139.9275;
+
+      let bestResult = null;
+      let minDistance = Infinity;
+
+      for (const prefix of JAPAN_PREFIXES) {
+        let testFullCode = "";
+        if (part1.length === 4) {
+          testFullCode = prefix + part1 + part2;
+        } else if (part1.length === 6) {
+          testFullCode = prefix.substring(0, 2) + part1 + part2;
+        } else {
+          continue;
+        }
+
+        const decoded = decodeFullCode(testFullCode);
+        if (decoded) {
+          const dist = calculateDistance(refLat, refLng, decoded.lat, decoded.lng);
+          if (dist < minDistance) {
+            minDistance = dist;
+            bestResult = {
+              lat: decoded.lat,
+              lng: decoded.lng,
+              formattedCode: `${part1}+${part2}`
+            };
+          }
+        }
+      }
+
+      return bestResult;
+    }
+
+    // =================================================================
+    // 2. 定数・初期設定・GPS状態管理
+    // =================================================================
+    const BASE_POINTS = { 1: 10, 2: 7, 3: 5, 4: 3, 5: 1 };
+    const LOWER_LIMITS = { 1: 7, 2: 5, 3: 3, 4: 1, 5: 0 };
+
+    const DEFAULT_TARGETS = [
+      {
+        id: 1,
+        title: "木目のベンチ",
+        plusCode: "9WHG+CV 木更津市、千葉県",
+        lat: 35.378625,
+        lng: 139.927375,
+        images: [
+          "https://images.unsplash.com/photo-1544816155-12df9643f363?w=400&q=80",
+          "https://images.unsplash.com/photo-1517646287270-a5a9ca602e5c?w=400&q=80",
+          "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=400&q=80",
+          "https://images.unsplash.com/photo-1519331379826-f10be5486c6f?w=400&q=80",
+          "https://images.unsplash.com/photo-1477959858617-67f30bc75b82?w=400&q=80"
+        ]
+      },
+      {
+        id: 2,
+        title: "赤色の消火栓看板",
+        plusCode: "9WJF+26 木更津市、千葉県",
+        lat: 35.380120,
+        lng: 139.928210,
+        images: [
+          "https://images.unsplash.com/photo-1563245372-f21724e3856d?w=400&q=80",
+          "https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=400&q=80",
+          "https://images.unsplash.com/photo-1526778548025-fa2f459cd5c1?w=400&q=80",
+          "https://images.unsplash.com/photo-1494526585095-c41746248156?w=400&q=80",
+          "https://images.unsplash.com/photo-1480714378408-67cf0d13bc1b?w=400&q=80"
+        ]
+      }
+    ];
+
+    let config = {
+      timeLimitMinutes: 20,
+      thresholdDistance: 25,
+      targets: JSON.parse(JSON.stringify(DEFAULT_TARGETS))
+    };
+
+    let currentLocation = {
+      lat: null,
+      lng: null,
+      accuracy: null,
+      isTracking: false
+    };
+
+    let gameState = {
+      isRunning: false,
+      timerInterval: null,
+      remainingSeconds: 0,
+      totalScore: 0,
+      currentTargetIndex: 0,
+      currentHintLevel: 1,
+      activeViewHintLevel: 1,
+      levelCurrentPoints: {},
+      clearCount: 0,
+      missCount: 0,
+      skipCount: 0
+    };
+
+    // =================================================================
+    // 3. アプリ起動とGPS常時監視
+    // =================================================================
+    window.addEventListener('DOMContentLoaded', () => {
+      const savedConfig = localStorage.getItem('tc_config');
+      if (savedConfig) {
+        try { config = JSON.parse(savedConfig); } catch (e) {}
+      }
+      updateStartScreenDisplay();
+      startContinuousGPSTracking();
+    });
+
+    function startContinuousGPSTracking() {
+      if (!navigator.geolocation) {
+        updateGPSStatusUI(false, "GPS非対応");
+        return;
+      }
+
+      navigator.geolocation.watchPosition(
+        (pos) => {
+          currentLocation.lat = pos.coords.latitude;
+          currentLocation.lng = pos.coords.longitude;
+          currentLocation.accuracy = Math.round(pos.coords.accuracy);
+          currentLocation.isTracking = true;
+          updateGPSStatusUI(true, `GPS受信中 (誤差±${currentLocation.accuracy}m)`);
+        },
+        (err) => {
+          currentLocation.isTracking = false;
+          let msg = "GPS取得待機";
+          if (err.code === 1) msg = "位置情報の許可が必要";
+          updateGPSStatusUI(false, msg);
+        },
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 3000 }
+      );
+    }
+
+    function updateGPSStatusUI(isActive, text) {
+      const pill = document.getElementById('gps-status-pill');
+      const startGpsText = document.getElementById('start-disp-gps');
+
+      if (pill) {
+        if (isActive) {
+          pill.className = "px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40";
+          pill.innerText = "🟢 GPS接続中";
+        } else {
+          pill.className = "px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-700 text-slate-400 border border-slate-600";
+          pill.innerText = "GPS待機中";
+        }
+      }
+
+      if (startGpsText) {
+        startGpsText.innerText = text;
+        startGpsText.className = isActive ? "font-bold text-emerald-400" : "font-bold text-slate-400";
+      }
+    }
+
+    function updateStartScreenDisplay() {
+      document.getElementById('start-disp-time').innerText = `${config.timeLimitMinutes}分`;
+      document.getElementById('start-disp-count').innerText = `${config.targets.length}問`;
+      document.getElementById('start-disp-dist').innerText = `半径 ${config.thresholdDistance}m 以内`;
+    }
+
+    // =================================================================
+    // 4. ゲーム進行ロジック
+    // =================================================================
+    function startGame() {
+      if (config.targets.length === 0) {
+        alert("お題が登録されていません。GM設定からお題を追加してください。");
+        return;
+      }
+
+      if (!currentLocation.isTracking) {
+        startContinuousGPSTracking();
+      }
+
+      gameState.isRunning = true;
+      gameState.remainingSeconds = config.timeLimitMinutes * 60;
+      gameState.totalScore = 0;
+      gameState.currentTargetIndex = 0;
+      gameState.clearCount = 0;
+      gameState.missCount = 0;
+      gameState.skipCount = 0;
+
+      document.getElementById('screen-start').classList.add('hidden');
+      document.getElementById('screen-result').classList.add('hidden');
+      document.getElementById('screen-game').classList.remove('hidden');
+
+      updateTimerDisplay();
+      if (gameState.timerInterval) clearInterval(gameState.timerInterval);
+      gameState.timerInterval = setInterval(() => {
+        gameState.remainingSeconds--;
+        updateTimerDisplay();
+        if (gameState.remainingSeconds <= 0) finishGame();
+      }, 1000);
+
+      loadCurrentTarget();
+    }
+
+    function updateTimerDisplay() {
+      const mins = Math.floor(gameState.remainingSeconds / 60);
+      const secs = gameState.remainingSeconds % 60;
+      const timerEl = document.getElementById('game-timer');
+      timerEl.innerText = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+      if (gameState.remainingSeconds <= 180) {
+        timerEl.classList.replace('text-amber-400', 'text-red-500');
+      } else {
+        timerEl.classList.replace('text-red-500', 'text-amber-400');
+      }
+    }
+
+    function loadCurrentTarget() {
+      const target = config.targets[gameState.currentTargetIndex];
+      if (!target) {
+        finishGame();
+        return;
+      }
+
+      gameState.currentHintLevel = 1;
+      gameState.activeViewHintLevel = 1;
+      gameState.levelCurrentPoints = {
+        1: BASE_POINTS[1],
+        2: BASE_POINTS[2],
+        3: BASE_POINTS[3],
+        4: BASE_POINTS[4],
+        5: BASE_POINTS[5]
+      };
+
+      document.getElementById('game-target-progress').innerText = `${gameState.currentTargetIndex + 1} / ${config.targets.length}`;
+      document.getElementById('game-score').innerText = `${gameState.totalScore} pt`;
+      document.getElementById('game-target-title').innerText = target.title || `ターゲット #${gameState.currentTargetIndex + 1}`;
+      
+      hideFeedback();
+      updateHintView();
+    }
+
+    function updateHintView() {
+      const target = config.targets[gameState.currentTargetIndex];
+      const maxLvl = gameState.currentHintLevel;
+      const currentViewLvl = gameState.activeViewHintLevel;
+
+      const currentPts = gameState.levelCurrentPoints[maxLvl];
+      document.getElementById('game-hint-badge').innerText = `Lv ${maxLvl} (正解時: +${currentPts} pt)`;
+
+      const img = document.getElementById('game-photo-img');
+      const loader = document.getElementById('game-photo-loading');
+      loader.classList.remove('hidden');
+      img.onload = () => loader.classList.add('hidden');
+      img.onerror = () => { loader.innerText = '画像の読み込みに失敗しました'; };
+      img.src = target.images[currentViewLvl - 1] || target.images[0] || '';
+
+      const tabsContainer = document.getElementById('game-hint-tabs');
+      tabsContainer.innerHTML = '';
+      for (let i = 1; i <= maxLvl; i++) {
+        const btn = document.createElement('button');
+        const isActive = (i === currentViewLvl);
+        btn.className = `px-3 py-1 rounded-lg text-xs font-bold transition ${
+          isActive ? 'bg-amber-500 text-slate-950 shadow' : 'bg-slate-700/80 text-slate-300 hover:bg-slate-600'
+        }`;
+        btn.innerText = `写真 ${i} (${gameState.levelCurrentPoints[i]}pt)`;
+        btn.onclick = () => {
+          gameState.activeViewHintLevel = i;
+          updateHintView();
+        };
+        tabsContainer.appendChild(btn);
+      }
+
+      const nextHintBtn = document.getElementById('btn-next-hint');
+      if (maxLvl >= 5) {
+        nextHintBtn.classList.add('hidden');
+      } else {
+        nextHintBtn.classList.remove('hidden');
+        const nextPts = gameState.levelCurrentPoints[maxLvl + 1];
+        document.getElementById('game-next-hint-penalty').innerText = `(次: +${nextPts}ptに移行)`;
+      }
+    }
+
+    function revealNextHint() {
+      if (gameState.currentHintLevel < 5) {
+        gameState.currentHintLevel++;
+        gameState.activeViewHintLevel = gameState.currentHintLevel;
+        updateHintView();
+      }
+    }
+
+    // =================================================================
+    // 5. GPS判定 & 中断処理
+    // =================================================================
+    function checkCurrentLocation() {
+      const target = config.targets[gameState.currentTargetIndex];
+
+      if (currentLocation.lat !== null && currentLocation.lng !== null) {
+        evaluateDistanceAndScoring(currentLocation.lat, currentLocation.lng, target);
+        return;
+      }
+
+      const btn = document.getElementById('btn-check-gps');
+      btn.disabled = true;
+      btn.innerText = "📡 GPS測位中...";
+      showFeedback("現在地を取得しています...", "info");
+
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          btn.disabled = false;
+          btn.innerText = "📍 ここで現在地判定！";
+          currentLocation.lat = pos.coords.latitude;
+          currentLocation.lng = pos.coords.longitude;
+          currentLocation.isTracking = true;
+          evaluateDistanceAndScoring(pos.coords.latitude, pos.coords.longitude, target);
+        },
+        (err) => {
+          btn.disabled = false;
+          btn.innerText = "📍 ここで現在地判定！";
+          let msg = "位置情報の取得に失敗しました。";
+          if (err.code === 1) msg = "ブラウザの位置情報の利用を許可してください。";
+          showFeedback(msg, "error");
+        },
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+      );
+    }
+
+    function evaluateDistanceAndScoring(userLat, userLng, target) {
+      const dist = calculateDistance(userLat, userLng, target.lat, target.lng);
+
+      if (dist <= config.thresholdDistance) {
+        const earnedPts = gameState.levelCurrentPoints[gameState.currentHintLevel];
+        gameState.totalScore += earnedPts;
+        gameState.clearCount++;
+        document.getElementById('game-score').innerText = `${gameState.totalScore} pt`;
+        showFeedback(`🎉 正解！ターゲットを発見！（+${earnedPts} pt / 誤差: 約${Math.round(dist)}m）`, "success");
+        setTimeout(() => { goToNextTarget(); }, 1800);
+      } else {
+        gameState.missCount++;
+        const currentLvl = gameState.currentHintLevel;
+        const currentPts = gameState.levelCurrentPoints[currentLvl];
+        const lowerLimit = LOWER_LIMITS[currentLvl];
+
+        if (currentPts > lowerLimit) {
+          gameState.levelCurrentPoints[currentLvl] = currentPts - 1;
+        }
+
+        updateHintView();
+        showFeedback(`❌ ここではありません！（お手つき：当該ヒント-1pt / ターゲットまで約 ${Math.round(dist)}m）`, "error");
+      }
+    }
+
+    function calculateDistance(lat1, lon1, lat2, lon2) {
+      const R = 6371000;
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a = 
+        Math.sin(dLat/2) * Math.sin(dLat/2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+        Math.sin(dLon/2) * Math.sin(dLon/2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      return R * c;
+    }
+
+    function skipTarget() {
+      if (confirm("このお題をスキップしますか？（0pt）")) {
+        gameState.skipCount++;
+        showFeedback("⏩ お題をスキップしました (0 pt)", "info");
+        setTimeout(() => { goToNextTarget(); }, 800);
+      }
+    }
+
+    // 探索中断してホーム（タイトル画面）に戻る
+    function abortGame() {
+      if (confirm("探索を中断してタイトル画面に戻りますか？\n（現在のスコアや進行状況はリセットされます）")) {
+        if (gameState.timerInterval) clearInterval(gameState.timerInterval);
+        gameState.isRunning = false;
+
+        document.getElementById('screen-game').classList.add('hidden');
+        document.getElementById('screen-result').classList.add('hidden');
+        document.getElementById('screen-start').classList.remove('hidden');
+
+        updateStartScreenDisplay();
+      }
+    }
+
+    function goToNextTarget() {
+      gameState.currentTargetIndex++;
+      if (gameState.currentTargetIndex >= config.targets.length) {
+        finishGame();
+      } else {
+        loadCurrentTarget();
+      }
+    }
+
+    function showFeedback(msg, type) {
+      const el = document.getElementById('game-feedback');
+      el.classList.remove('hidden', 'bg-emerald-900/60', 'text-emerald-300', 'border-emerald-500', 'bg-red-900/60', 'text-red-300', 'border-red-500', 'bg-slate-800', 'text-slate-300', 'border-slate-600');
+      if (type === 'success') {
+        el.classList.add('bg-emerald-900/60', 'text-emerald-300', 'border-emerald-500');
+      } else if (type === 'error') {
+        el.classList.add('bg-red-900/60', 'text-red-300', 'border-red-500');
+      } else {
+        el.classList.add('bg-slate-800', 'text-slate-300', 'border-slate-600');
+      }
+      el.innerText = msg;
+    }
+
+    function hideFeedback() {
+      document.getElementById('game-feedback').classList.add('hidden');
+    }
+
+    function finishGame() {
+      if (gameState.timerInterval) clearInterval(gameState.timerInterval);
+      gameState.isRunning = false;
+      document.getElementById('screen-game').classList.add('hidden');
+      document.getElementById('screen-result').classList.remove('hidden');
+      document.getElementById('result-final-score').innerHTML = `${gameState.totalScore} <span class="text-xl text-slate-300">pt</span>`;
+      document.getElementById('result-clear-count').innerText = `${gameState.clearCount} 件`;
+      document.getElementById('result-miss-count').innerText = `${gameState.missCount} 回`;
+      document.getElementById('result-skip-count').innerText = `${gameState.skipCount} 件`;
+    }
+
+    function resetToTitle() {
+      document.getElementById('screen-result').classList.add('hidden');
+      document.getElementById('screen-start').classList.remove('hidden');
+      updateStartScreenDisplay();
+    }
+
+    // =================================================================
+    // 6. GM管理モーダル
+    // =================================================================
+    function openGMModal() {
+      document.getElementById('gm-input-time').value = config.timeLimitMinutes;
+      document.getElementById('gm-input-dist').value = config.thresholdDistance;
+      renderGMTargetList();
+      document.getElementById('modal-gm').classList.remove('hidden');
+    }
+
+    function closeGMModal() {
+      document.getElementById('modal-gm').classList.add('hidden');
+    }
+
+    function renderGMTargetList() {
+      const container = document.getElementById('gm-target-list');
+      document.getElementById('gm-target-count').innerText = config.targets.length;
+      container.innerHTML = '';
+
+      config.targets.forEach((t, idx) => {
+        const card = document.createElement('div');
+        card.className = "bg-slate-900/90 p-3.5 rounded-xl border border-slate-700 space-y-3";
+        card.innerHTML = `
+          <div class="flex justify-between items-center border-b border-slate-800 pb-1.5">
+            <span class="font-bold text-amber-400 text-sm">お題 #${idx + 1}</span>
+            <button onclick="removeGMTarget(${idx})" class="text-red-400 hover:text-red-300 text-xs">削除</button>
+          </div>
+
+          <div>
+            <label class="block text-[11px] text-slate-400 mb-0.5">お題タイトル</label>
+            <input type="text" value="${t.title || ''}" onchange="updateTargetField(${idx}, 'title', this.value)" placeholder="例: 公園の石碑" class="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-white text-xs">
+          </div>
+
+          <!-- Plus Code ＆ 緯度経度 -->
+          <div class="bg-slate-950/60 p-2.5 rounded-lg border border-slate-800 space-y-2">
+            <div>
+              <div class="flex justify-between items-center mb-0.5">
+                <label class="text-[11px] text-amber-300 font-semibold">📍 Googleマップ Plus Code</label>
+                <span id="pluscode-status-${idx}" class="text-[10px] text-slate-500">貼り付けで自動反映</span>
+              </div>
+              <input type="text" 
+                     value="${t.plusCode || ''}" 
+                     oninput="handlePlusCodeInput(${idx}, this.value)" 
+                     onpaste="setTimeout(() => handlePlusCodeInput(${idx}, this.value), 50)" 
+                     onchange="handlePlusCodeInput(${idx}, this.value)" 
+                     placeholder="例: 9WHG+CV 木更津市、千葉県" 
+                     class="w-full bg-slate-800 border border-amber-500/40 focus:border-amber-400 rounded px-2 py-1 text-white font-mono text-xs">
+            </div>
+
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="block text-[10px] text-slate-400">緯度 (Lat)</label>
+                <input type="number" step="any" id="gm-lat-${idx}" value="${t.lat}" onchange="updateTargetField(${idx}, 'lat', parseFloat(this.value))" class="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-white font-mono text-xs">
+              </div>
+              <div>
+                <label class="block text-[10px] text-slate-400">経度 (Lng)</label>
+                <input type="number" step="any" id="gm-lng-${idx}" value="${t.lng}" onchange="updateTargetField(${idx}, 'lng', parseFloat(this.value))" class="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-white font-mono text-xs">
+              </div>
+            </div>
+          </div>
+
+          <!-- 5段階ヒント画像とプレビュー -->
+          <div class="space-y-2">
+            <label class="block text-[11px] text-slate-300 font-semibold">📸 ヒント写真 (Lv1〜5) & プレビュー</label>
+            
+            <div class="grid grid-cols-5 gap-1.5 bg-slate-950 p-2 rounded-lg border border-slate-800">
+              ${[0, 1, 2, 3, 4].map(imgIdx => `
+                <div class="flex flex-col items-center space-y-1">
+                  <span class="text-[9px] text-slate-400 font-bold">Lv ${imgIdx + 1}</span>
+                  <div class="w-full aspect-square bg-slate-800 rounded border border-slate-700 overflow-hidden flex items-center justify-center">
+                    <img id="preview-${idx}-${imgIdx}" src="${t.images[imgIdx] || ''}" alt="Lv${imgIdx+1}" class="w-full h-full object-cover ${t.images[imgIdx] ? '' : 'hidden'}">
+                    <span id="placeholder-${idx}-${imgIdx}" class="text-[9px] text-slate-500 ${t.images[imgIdx] ? 'hidden' : ''}">No img</span>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+
+            <div class="space-y-1.5 pt-1">
+              ${[0, 1, 2, 3, 4].map(imgIdx => `
+                <div class="flex items-center space-x-1.5">
+                  <span class="w-7 text-[10px] font-bold text-amber-400 shrink-0">Lv ${imgIdx+1}:</span>
+                  <input type="text" placeholder="画像URLまたは右から選択" value="${t.images[imgIdx] || ''}" oninput="updateTargetImageURL(${idx}, ${imgIdx}, this.value)" class="flex-1 bg-slate-800 border border-slate-700 rounded px-2 py-0.5 text-[11px] text-slate-200">
+                  <label class="px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded text-[10px] text-slate-300 cursor-pointer shrink-0">
+                    📁
+                    <input type="file" accept="image/*" onchange="handleImageFileUpload(event, ${idx}, ${imgIdx})" class="hidden">
+                  </label>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    function handlePlusCodeInput(targetIdx, rawText) {
+      config.targets[targetIdx].plusCode = rawText;
+      const statusEl = document.getElementById(`pluscode-status-${targetIdx}`);
+      const decoded = parseAndDecodePlusCode(rawText);
+
+      if (decoded) {
+        config.targets[targetIdx].lat = decoded.lat;
+        config.targets[targetIdx].lng = decoded.lng;
+
+        const latInput = document.getElementById(`gm-lat-${targetIdx}`);
+        const lngInput = document.getElementById(`gm-lng-${targetIdx}`);
+        if (latInput) latInput.value = decoded.lat;
+        if (lngInput) lngInput.value = decoded.lng;
+
+        if (statusEl) {
+          statusEl.innerText = "✅ 座標変換成功！";
+          statusEl.className = "text-[10px] text-emerald-400 font-bold";
+        }
+      } else {
+        if (statusEl && rawText.trim() !== "") {
+          statusEl.innerText = "⚠️ コードを確認してください";
+          statusEl.className = "text-[10px] text-red-400";
+        }
+      }
+    }
+
+    function updateTargetImageURL(targetIdx, imgIdx, url) {
+      config.targets[targetIdx].images[imgIdx] = url;
+      updatePreviewThumbnail(targetIdx, imgIdx, url);
+    }
+
+    function handleImageFileUpload(event, targetIdx, imgIdx) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const base64URL = e.target.result;
+        config.targets[targetIdx].images[imgIdx] = base64URL;
+        updatePreviewThumbnail(targetIdx, imgIdx, base64URL);
+        renderGMTargetList();
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function updatePreviewThumbnail(targetIdx, imgIdx, url) {
+      const imgEl = document.getElementById(`preview-${targetIdx}-${imgIdx}`);
+      const placeholderEl = document.getElementById(`placeholder-${targetIdx}-${imgIdx}`);
+      if (imgEl && placeholderEl) {
+        if (url && url.trim() !== "") {
+          imgEl.src = url;
+          imgEl.classList.remove('hidden');
+          placeholderEl.classList.add('hidden');
+        } else {
+          imgEl.classList.add('hidden');
+          placeholderEl.classList.remove('hidden');
+        }
+      }
+    }
+
+    function updateTargetField(idx, field, val) {
+      config.targets[idx][field] = val;
+    }
+
+    function addNewTargetForm() {
+      config.targets.push({
+        id: Date.now(),
+        title: `新規ターゲット #${config.targets.length + 1}`,
+        plusCode: "",
+        lat: (currentLocation.lat !== null) ? currentLocation.lat : 35.378625,
+        lng: (currentLocation.lng !== null) ? currentLocation.lng : 139.927375,
+        images: ["", "", "", "", ""]
+      });
+      renderGMTargetList();
+    }
+
+    function removeGMTarget(idx) {
+      if (confirm("このお題を削除しますか？")) {
+        config.targets.splice(idx, 1);
+        renderGMTargetList();
+      }
+    }
+
+    function saveGMSettings() {
+      config.timeLimitMinutes = parseInt(document.getElementById('gm-input-time').value) || 20;
+      config.thresholdDistance = parseInt(document.getElementById('gm-input-dist').value) || 25;
+      localStorage.setItem('tc_config', JSON.stringify(config));
+      updateStartScreenDisplay();
+      closeGMModal();
+      alert("設定を保存しました！");
+    }
+
+    function exportDataJSON() {
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(config, null, 2));
+      const a = document.createElement('a');
+      a.setAttribute("href", dataStr);
+      a.setAttribute("download", `target_capture_data_${Date.now()}.json`);
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }
+
+    function importDataJSON(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          config = JSON.parse(e.target.result);
+          localStorage.setItem('tc_config', JSON.stringify(config));
+          renderGMTargetList();
+          updateStartScreenDisplay();
+          alert("お題データを正常に読み込みました！");
+        } catch (err) {
+          alert("JSONの読み込みに失敗しました。");
+        }
+      };
+      reader.readAsText(file);
+    }
+  </script>
+</body>
+</html>
