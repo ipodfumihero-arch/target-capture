@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>ターゲットキャプチャ - 街歩き探索ゲーム</title>
 
   <!-- Tailwind CSS -->
@@ -166,18 +166,20 @@
 
   </main>
 
-  <!-- ================= 4. GM設定モーダル ================= -->
-  <div id="modal-gm" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-3 overflow-y-auto">
-    <div class="bg-slate-800 border border-slate-700 w-full max-w-lg rounded-2xl p-4 sm:p-5 space-y-4 text-slate-200 max-h-[92vh] flex flex-col shadow-2xl">
+  <!-- ================= 4. GM設定モーダル（iPhone Safari UIに完全最適化） ================= -->
+  <div id="modal-gm" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-2 sm:p-4">
+    <div class="bg-slate-800 border border-slate-700 w-full max-w-lg rounded-2xl p-4 flex flex-col max-h-[88vh] shadow-2xl">
       
-      <div class="flex justify-between items-center border-b border-slate-700 pb-3">
+      <!-- モーダルヘッダー -->
+      <div class="flex justify-between items-center border-b border-slate-700 pb-2.5 flex-shrink-0">
         <h3 class="font-bold text-white flex items-center space-x-2 text-sm sm:text-base">
           <span>⚙️ GM・お題編集メニュー</span>
         </h3>
-        <button onclick="closeGMModal()" class="text-slate-400 hover:text-white text-lg font-bold">✕</button>
+        <button onclick="closeGMModal()" class="text-slate-400 hover:text-white text-xl font-bold p-1">✕</button>
       </div>
 
-      <div class="overflow-y-auto flex-1 space-y-4 pr-1 text-xs">
+      <!-- モーダルスクロール可能ボディ -->
+      <div class="overflow-y-auto flex-1 space-y-4 py-3 pr-1 text-xs min-h-0">
         <!-- 基本ルール設定 -->
         <div class="space-y-3 bg-slate-900/60 p-3 rounded-xl border border-slate-700/60">
           <div class="font-bold text-slate-100">基本ルール設定</div>
@@ -219,9 +221,10 @@
         </div>
       </div>
 
-      <div class="border-t border-slate-700 pt-3">
-        <button onclick="saveGMSettings()" class="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl transition">
-          設定を保存して閉じる
+      <!-- モーダルフッター（常に最下部に固定表示） -->
+      <div class="border-t border-slate-700 pt-2.5 flex-shrink-0">
+        <button id="btn-save-gm-settings" onclick="saveGMSettings()" class="w-full py-3 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-bold rounded-xl transition text-sm shadow-md">
+          💾 設定を保存して閉じる
         </button>
       </div>
     </div>
@@ -645,7 +648,6 @@
       }
     }
 
-    // 探索中断してホーム（タイトル画面）に戻る
     function abortGame() {
       if (confirm("探索を中断してタイトル画面に戻りますか？\n（現在のスコアや進行状況はリセットされます）")) {
         if (gameState.timerInterval) clearInterval(gameState.timerInterval);
@@ -703,7 +705,7 @@
     }
 
     // =================================================================
-    // 6. GM管理モーダル
+    // 6. GM管理モーダル（自動画像圧縮 ＆ iPhone最適化）
     // =================================================================
     function openGMModal() {
       document.getElementById('gm-input-time').value = config.timeLimitMinutes;
@@ -723,24 +725,28 @@
 
       config.targets.forEach((t, idx) => {
         const card = document.createElement('div');
-        card.className = "bg-slate-900/90 p-3.5 rounded-xl border border-slate-700 space-y-3";
+        card.className = "bg-slate-900/90 p-3 rounded-xl border border-slate-700 space-y-2.5";
         card.innerHTML = `
           <div class="flex justify-between items-center border-b border-slate-800 pb-1.5">
-            <span class="font-bold text-amber-400 text-sm">お題 #${idx + 1}</span>
-            <button onclick="removeGMTarget(${idx})" class="text-red-400 hover:text-red-300 text-xs">削除</button>
+            <span class="font-bold text-amber-400 text-xs">お題 #${idx + 1}</span>
+            <div class="flex items-center space-x-1">
+              <button onclick="moveGMTargetUp(${idx})" class="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed text-[10px] rounded border border-slate-700 transition" ${idx === 0 ? 'disabled' : ''} title="上へ移動">↑ 上へ</button>
+              <button onclick="moveGMTargetDown(${idx})" class="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed text-[10px] rounded border border-slate-700 transition" ${idx === config.targets.length - 1 ? 'disabled' : ''} title="下へ移動">↓ 下へ</button>
+              <button onclick="removeGMTarget(${idx})" class="px-2 py-0.5 bg-red-950/40 hover:bg-red-900/60 text-red-400 hover:text-red-300 text-[10px] rounded border border-red-800/50 transition">削除</button>
+            </div>
           </div>
 
           <div>
-            <label class="block text-[11px] text-slate-400 mb-0.5">お題タイトル</label>
+            <label class="block text-[10px] text-slate-400 mb-0.5">お題タイトル</label>
             <input type="text" value="${t.title || ''}" onchange="updateTargetField(${idx}, 'title', this.value)" placeholder="例: 公園の石碑" class="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-white text-xs">
           </div>
 
           <!-- Plus Code ＆ 緯度経度 -->
-          <div class="bg-slate-950/60 p-2.5 rounded-lg border border-slate-800 space-y-2">
+          <div class="bg-slate-950/60 p-2 rounded-lg border border-slate-800 space-y-1.5">
             <div>
               <div class="flex justify-between items-center mb-0.5">
-                <label class="text-[11px] text-amber-300 font-semibold">📍 Googleマップ Plus Code</label>
-                <span id="pluscode-status-${idx}" class="text-[10px] text-slate-500">貼り付けで自動反映</span>
+                <label class="text-[10px] text-amber-300 font-semibold">📍 Plus Code</label>
+                <span id="pluscode-status-${idx}" class="text-[9px] text-slate-500">貼り付けで自動反映</span>
               </div>
               <input type="text" 
                      value="${t.plusCode || ''}" 
@@ -753,39 +759,39 @@
 
             <div class="grid grid-cols-2 gap-2">
               <div>
-                <label class="block text-[10px] text-slate-400">緯度 (Lat)</label>
-                <input type="number" step="any" id="gm-lat-${idx}" value="${t.lat}" onchange="updateTargetField(${idx}, 'lat', parseFloat(this.value))" class="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-white font-mono text-xs">
+                <label class="block text-[9px] text-slate-400">緯度 (Lat)</label>
+                <input type="number" step="any" id="gm-lat-${idx}" value="${t.lat}" onchange="updateTargetField(${idx}, 'lat', parseFloat(this.value))" class="w-full bg-slate-800 border border-slate-700 rounded px-2 py-0.5 text-white font-mono text-xs">
               </div>
               <div>
-                <label class="block text-[10px] text-slate-400">経度 (Lng)</label>
-                <input type="number" step="any" id="gm-lng-${idx}" value="${t.lng}" onchange="updateTargetField(${idx}, 'lng', parseFloat(this.value))" class="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-white font-mono text-xs">
+                <label class="block text-[9px] text-slate-400">経度 (Lng)</label>
+                <input type="number" step="any" id="gm-lng-${idx}" value="${t.lng}" onchange="updateTargetField(${idx}, 'lng', parseFloat(this.value))" class="w-full bg-slate-800 border border-slate-700 rounded px-2 py-0.5 text-white font-mono text-xs">
               </div>
             </div>
           </div>
 
           <!-- 5段階ヒント画像とプレビュー -->
-          <div class="space-y-2">
-            <label class="block text-[11px] text-slate-300 font-semibold">📸 ヒント写真 (Lv1〜5) & プレビュー</label>
+          <div class="space-y-1.5">
+            <label class="block text-[10px] text-slate-300 font-semibold">📸 ヒント写真 (Lv1〜5)</label>
             
-            <div class="grid grid-cols-5 gap-1.5 bg-slate-950 p-2 rounded-lg border border-slate-800">
+            <div class="grid grid-cols-5 gap-1 bg-slate-950 p-1.5 rounded-lg border border-slate-800">
               ${[0, 1, 2, 3, 4].map(imgIdx => `
-                <div class="flex flex-col items-center space-y-1">
-                  <span class="text-[9px] text-slate-400 font-bold">Lv ${imgIdx + 1}</span>
+                <div class="flex flex-col items-center space-y-0.5">
+                  <span class="text-[8px] text-slate-400 font-bold">Lv ${imgIdx + 1}</span>
                   <div class="w-full aspect-square bg-slate-800 rounded border border-slate-700 overflow-hidden flex items-center justify-center">
                     <img id="preview-${idx}-${imgIdx}" src="${t.images[imgIdx] || ''}" alt="Lv${imgIdx+1}" class="w-full h-full object-cover ${t.images[imgIdx] ? '' : 'hidden'}">
-                    <span id="placeholder-${idx}-${imgIdx}" class="text-[9px] text-slate-500 ${t.images[imgIdx] ? 'hidden' : ''}">No img</span>
+                    <span id="placeholder-${idx}-${imgIdx}" class="text-[8px] text-slate-500 ${t.images[imgIdx] ? 'hidden' : ''}">No img</span>
                   </div>
                 </div>
               `).join('')}
             </div>
 
-            <div class="space-y-1.5 pt-1">
+            <div class="space-y-1 pt-0.5">
               ${[0, 1, 2, 3, 4].map(imgIdx => `
-                <div class="flex items-center space-x-1.5">
-                  <span class="w-7 text-[10px] font-bold text-amber-400 shrink-0">Lv ${imgIdx+1}:</span>
-                  <input type="text" placeholder="画像URLまたは右から選択" value="${t.images[imgIdx] || ''}" oninput="updateTargetImageURL(${idx}, ${imgIdx}, this.value)" class="flex-1 bg-slate-800 border border-slate-700 rounded px-2 py-0.5 text-[11px] text-slate-200">
-                  <label class="px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded text-[10px] text-slate-300 cursor-pointer shrink-0">
-                    📁
+                <div class="flex items-center space-x-1">
+                  <span class="w-6 text-[9px] font-bold text-amber-400 shrink-0">Lv ${imgIdx+1}:</span>
+                  <input type="text" id="gm-img-input-${idx}-${imgIdx}" placeholder="画像URLまたは右から選択" value="${t.images[imgIdx] && t.images[imgIdx].startsWith('data:image') ? '[写真ライブラリの画像]' : (t.images[imgIdx] || '')}" oninput="updateTargetImageURL(${idx}, ${imgIdx}, this.value)" class="flex-1 bg-slate-800 border border-slate-700 rounded px-1.5 py-0.5 text-[10px] text-slate-200">
+                  <label class="px-2 py-1 bg-slate-700 hover:bg-slate-600 active:bg-slate-500 rounded text-[10px] text-slate-300 cursor-pointer shrink-0 font-bold">
+                    📁 選択
                     <input type="file" accept="image/*" onchange="handleImageFileUpload(event, ${idx}, ${imgIdx})" class="hidden">
                   </label>
                 </div>
@@ -795,6 +801,22 @@
         `;
         container.appendChild(card);
       });
+    }
+
+    function moveGMTargetUp(idx) {
+      if (idx <= 0) return;
+      const temp = config.targets[idx];
+      config.targets[idx] = config.targets[idx - 1];
+      config.targets[idx - 1] = temp;
+      renderGMTargetList();
+    }
+
+    function moveGMTargetDown(idx) {
+      if (idx >= config.targets.length - 1) return;
+      const temp = config.targets[idx];
+      config.targets[idx] = config.targets[idx + 1];
+      config.targets[idx + 1] = temp;
+      renderGMTargetList();
     }
 
     function handlePlusCodeInput(targetIdx, rawText) {
@@ -813,12 +835,12 @@
 
         if (statusEl) {
           statusEl.innerText = "✅ 座標変換成功！";
-          statusEl.className = "text-[10px] text-emerald-400 font-bold";
+          statusEl.className = "text-[9px] text-emerald-400 font-bold";
         }
       } else {
         if (statusEl && rawText.trim() !== "") {
           statusEl.innerText = "⚠️ コードを確認してください";
-          statusEl.className = "text-[10px] text-red-400";
+          statusEl.className = "text-[9px] text-red-400";
         }
       }
     }
@@ -828,16 +850,48 @@
       updatePreviewThumbnail(targetIdx, imgIdx, url);
     }
 
+    // iPhoneの高解像度写真を自動リサイズ・圧縮して保存（LocalStorage容量オーバーを防止）
     function handleImageFileUpload(event, targetIdx, imgIdx) {
       const file = event.target.files[0];
       if (!file) return;
 
       const reader = new FileReader();
       reader.onload = (e) => {
-        const base64URL = e.target.result;
-        config.targets[targetIdx].images[imgIdx] = base64URL;
-        updatePreviewThumbnail(targetIdx, imgIdx, base64URL);
-        renderGMTargetList();
+        const img = new Image();
+        img.onload = () => {
+          // 最大幅/高さを800pxに圧縮
+          const MAX_SIZE = 800;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > height) {
+            if (width > MAX_SIZE) {
+              height *= MAX_SIZE / width;
+              width = MAX_SIZE;
+            }
+          } else {
+            if (height > MAX_SIZE) {
+              width *= MAX_SIZE / height;
+              height = MAX_SIZE;
+            }
+          }
+
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+
+          // JPEG品質0.75で約50KBに軽量化
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.75);
+
+          config.targets[targetIdx].images[imgIdx] = compressedDataUrl;
+          updatePreviewThumbnail(targetIdx, imgIdx, compressedDataUrl);
+
+          const inputEl = document.getElementById(`gm-img-input-${targetIdx}-${imgIdx}`);
+          if (inputEl) inputEl.value = '[写真ライブラリの画像]';
+        };
+        img.src = e.target.result;
       };
       reader.readAsDataURL(file);
     }
@@ -880,13 +934,32 @@
       }
     }
 
+    // iPhone Safariでも確実に保存完了するよう例外処理＆UI同期を実装
     function saveGMSettings() {
-      config.timeLimitMinutes = parseInt(document.getElementById('gm-input-time').value) || 20;
-      config.thresholdDistance = parseInt(document.getElementById('gm-input-dist').value) || 25;
-      localStorage.setItem('tc_config', JSON.stringify(config));
-      updateStartScreenDisplay();
-      closeGMModal();
-      alert("設定を保存しました！");
+      const btn = document.getElementById('btn-save-gm-settings');
+      btn.innerText = "💾 保存中...";
+
+      setTimeout(() => {
+        try {
+          config.timeLimitMinutes = parseInt(document.getElementById('gm-input-time').value) || 20;
+          config.thresholdDistance = parseInt(document.getElementById('gm-input-dist').value) || 25;
+          
+          localStorage.setItem('tc_config', JSON.stringify(config));
+          updateStartScreenDisplay();
+          closeGMModal();
+          alert("設定を保存しました！");
+        } catch (err) {
+          console.error("Save error:", err);
+          // 容量オーバー時のフォールバック処理
+          if (err.name === 'QuotaExceededError' || err.code === 22) {
+            alert("画像データが多いためブラウザの保存上限を超えました。一度『JSONを書き出す』で保存するか、お題数を調整してください。");
+          } else {
+            alert("設定の保存に失敗しました: " + err.message);
+          }
+        } finally {
+          btn.innerText = "💾 設定を保存して閉じる";
+        }
+      }, 50);
     }
 
     function exportDataJSON() {
