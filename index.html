@@ -1,4 +1,4 @@
-<!-- Version: 1.2.0 | Updated: 2026-09-02 | Feature: Inline Leaflet Map in GM Settings -->
+<!-- Version: 1.3.0 | Updated: 2026-09-02 | Feature: IndexedDB persistence & Option B Cloud Room Sync -->
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -46,14 +46,14 @@
   <main class="flex-1 max-w-md w-full mx-auto p-4 flex flex-col justify-between">
 
     <!-- ================= 1. スタート画面 ================= -->
-    <div id="screen-start" class="flex-1 flex flex-col justify-center items-center text-center space-y-5 py-4">
-      <div class="bg-amber-100/80 p-5 rounded-full border-2 border-amber-300/80 shadow-inner">
-        <span class="text-6xl">🎯</span>
+    <div id="screen-start" class="flex-1 flex flex-col justify-center items-center text-center space-y-4 py-3">
+      <div class="bg-amber-100/80 p-4 rounded-full border-2 border-amber-300/80 shadow-inner">
+        <span class="text-5xl">🎯</span>
       </div>
 
       <div>
         <h2 class="text-2xl font-black text-stone-900 tracking-tight">ターゲットキャプチャ</h2>
-        <p class="text-xs text-stone-600 mt-2 leading-relaxed font-medium">
+        <p class="text-xs text-stone-600 mt-1.5 leading-relaxed font-medium">
           写真を手がかりに街を探索せよ！<br>
           少ないヒントでターゲットに辿り着くほど高得点。<br>
           <span class="text-amber-800 font-bold bg-amber-100/70 px-1.5 py-0.5 rounded">※お手つき時は当該ヒントptが減少（下限ガード有）</span>
@@ -61,7 +61,7 @@
       </div>
 
       <!-- 設定サマリー -->
-      <div class="w-full bg-[#FFFDF7] rounded-2xl p-4 border border-stone-300 text-left text-xs space-y-2.5 text-stone-700 shadow-sm">
+      <div class="w-full bg-[#FFFDF7] rounded-2xl p-3.5 border border-stone-300 text-left text-xs space-y-2 text-stone-700 shadow-sm">
         <div class="flex justify-between border-b border-stone-100 pb-1.5">
           <span class="text-stone-500 font-medium">制限時間:</span>
           <span id="start-disp-time" class="font-bold text-stone-900">20分</span>
@@ -79,6 +79,11 @@
           <span id="start-disp-gps" class="font-bold text-stone-500">未接続</span>
         </div>
       </div>
+
+      <!-- 参加者向け：合言葉（4桁コード）でお題を受信ボタン -->
+      <button onclick="openJoinModal()" class="w-full py-2.5 bg-[#FFFDF7] hover:bg-stone-100 active:bg-stone-200 border border-stone-300 text-[#3B6E4A] font-bold text-xs rounded-xl shadow-sm transition flex items-center justify-center space-x-1.5">
+        <span>👥 合言葉（4桁コード）でお題を受信</span>
+      </button>
 
       <!-- 探索開始ボタン -->
       <button id="btn-start-game" onclick="startGame()" class="w-full py-4 bg-[#4D7C5D] hover:bg-[#3F684D] active:scale-95 text-white font-black text-xl rounded-2xl shadow-md transition transform">
@@ -215,6 +220,45 @@
           </div>
         </div>
 
+        <!-- 方式B：クラウド同期（合言葉発行） -->
+        <div class="space-y-2.5 bg-[#FFFDF7] p-3.5 rounded-xl border border-stone-300 shadow-sm">
+          <div class="flex justify-between items-center">
+            <span class="font-bold text-stone-900">📡 クラウド同期・合言葉（4桁）発行</span>
+            <button type="button" onclick="toggleFirebaseConfigUI()" class="text-[10px] font-bold text-[#3B6E4A] hover:underline">
+              ⚙️ 接続設定
+            </button>
+          </div>
+          <p class="text-[11px] text-stone-600 leading-relaxed">
+            登録したお題（撮影写真・座標含む）をクラウドへ一時保管し、参加者へ一括配信するための合言葉を発行します。
+          </p>
+
+          <!-- 発行結果カード -->
+          <div id="gm-room-card" class="hidden p-3 bg-emerald-50 rounded-xl border border-emerald-300 space-y-1 text-center">
+            <div class="text-[10px] text-emerald-800 font-bold">参加者用 合言葉（4桁コード）</div>
+            <div id="gm-room-code-display" class="text-3xl font-black text-[#3B6E4A] font-mono tracking-widest">----</div>
+            <div class="text-[9px] text-emerald-700">参加者にタイトル画面の『合言葉でお題を受信』から入力してもらってください</div>
+          </div>
+
+          <button type="button" id="btn-publish-room" onclick="publishRoomCode()" class="w-full py-2.5 bg-[#4D7C5D] hover:bg-[#3F684D] active:bg-[#34553F] text-white font-bold rounded-xl text-xs shadow-md transition flex items-center justify-center space-x-1.5">
+            <span>🚀 部屋を作成して合言葉を発行</span>
+          </button>
+
+          <!-- Firebase設定折りたたみUI -->
+          <div id="gm-firebase-config-area" class="hidden pt-2 border-t border-stone-200 space-y-2 text-[11px]">
+            <div class="font-bold text-stone-700">Firebase Realtime Database 設定</div>
+            <p class="text-[10px] text-stone-500 leading-normal">
+              Firebase Consoleで作成したプロジェクトの Realtime Database URL を入力してください（ルール: read/write を true に設定）。
+            </p>
+            <div>
+              <label class="block text-[10px] text-stone-500 mb-0.5">Database URL</label>
+              <input type="text" id="cfg-firebase-dburl" placeholder="https://your-project-default-rtdb.firebaseio.com" class="w-full bg-white border border-stone-300 rounded px-2 py-1 text-stone-800 font-mono text-[10px]">
+            </div>
+            <button type="button" onclick="saveFirebaseConfig()" class="w-full py-1.5 bg-stone-200 hover:bg-stone-300 text-stone-700 font-bold rounded text-xs transition">
+              接続URLを保存
+            </button>
+          </div>
+        </div>
+
         <!-- お題一覧 -->
         <div class="space-y-3">
           <div class="flex justify-between items-center">
@@ -226,9 +270,9 @@
           <div id="gm-target-list" class="space-y-4"></div>
         </div>
 
-        <!-- データ入出力 -->
+        <!-- データ入出力（オフラインファイル共有用） -->
         <div class="pt-2 border-t border-stone-300 space-y-2">
-          <div class="font-bold text-stone-700">データ配布・共有</div>
+          <div class="font-bold text-stone-700">バックアップ・オフライン配布 (JSON)</div>
           <div class="grid grid-cols-2 gap-2">
             <button onclick="exportDataJSON()" class="py-2 bg-stone-200 hover:bg-stone-300 text-stone-800 rounded-lg text-xs font-bold border border-stone-300 transition">
               📥 JSONを書き出す
@@ -250,13 +294,117 @@
     </div>
   </div>
 
+  <!-- ================= 5. 合言葉（4桁コード）受信モーダル ================= -->
+  <div id="modal-join" class="fixed inset-0 bg-stone-900/60 backdrop-blur-sm z-[70] hidden flex items-center justify-center p-4">
+    <div class="bg-[#FAF7EE] border border-stone-300 w-full max-w-sm rounded-2xl p-5 flex flex-col space-y-4 shadow-2xl">
+      <div class="flex justify-between items-center border-b border-stone-300 pb-2">
+        <h3 class="font-bold text-stone-900 text-sm flex items-center space-x-1.5">
+          <span>👥 合言葉でお題を受信</span>
+        </h3>
+        <button onclick="closeJoinModal()" class="text-stone-400 hover:text-stone-700 text-xl font-bold p-1">✕</button>
+      </div>
+      
+      <p class="text-xs text-stone-600 leading-relaxed">
+        GMから伝えられた4桁の合言葉（数字）を入力してください。撮影写真とお題データを受信します。
+      </p>
+
+      <div>
+        <input type="text" id="join-room-code" maxlength="4" placeholder="例: 1234" pattern="\d*" class="w-full text-center text-3xl font-black font-mono tracking-widest bg-white border-2 border-stone-300 focus:border-[#4D7C5D] focus:outline-none rounded-xl py-3 text-stone-900 shadow-inner">
+      </div>
+
+      <div id="join-status-msg" class="hidden p-2.5 rounded-xl text-xs font-bold text-center border"></div>
+
+      <div class="grid grid-cols-2 gap-2 pt-1">
+        <button onclick="closeJoinModal()" class="py-2.5 bg-stone-200 hover:bg-stone-300 text-stone-700 font-bold rounded-xl text-xs transition">
+          キャンセル
+        </button>
+        <button id="btn-submit-join" onclick="downloadGameFromRoom()" class="py-2.5 bg-[#4D7C5D] hover:bg-[#3F684D] active:bg-[#34553F] text-white font-bold rounded-xl text-xs transition shadow-md">
+          📥 受信する
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- JavaScript ロジック -->
   <script>
+    // =================================================================
+    // 0. IndexedDB 完全永続化ヘルパー (容量制限の撤廃)
+    // =================================================================
+    const DB_NAME = 'TargetCaptureDB';
+    const DB_VERSION = 1;
+    const STORE_NAME = 'app_state';
+
+    function openDB() {
+      return new Promise((resolve, reject) => {
+        if (!window.indexedDB) {
+          reject(new Error("IndexedDB非対応ブラウザ"));
+          return;
+        }
+        const request = indexedDB.open(DB_NAME, DB_VERSION);
+        request.onupgradeneeded = (e) => {
+          const db = e.target.result;
+          if (!db.objectStoreNames.contains(STORE_NAME)) {
+            db.createObjectStore(STORE_NAME);
+          }
+        };
+        request.onsuccess = (e) => resolve(e.target.result);
+        request.onerror = (e) => reject(e.target.error);
+      });
+    }
+
+    async function idbSaveConfig(cfg) {
+      try {
+        const db = await openDB();
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction(STORE_NAME, 'readwrite');
+          const store = tx.objectStore(STORE_NAME);
+          const req = store.put(cfg, 'config');
+          req.onsuccess = () => resolve(true);
+          req.onerror = (e) => reject(e.target.error);
+        });
+      } catch (err) {
+        console.warn('IndexedDB save fallback:', err);
+        try { localStorage.setItem('tc_config', JSON.stringify(cfg)); } catch (e) {}
+        return false;
+      }
+    }
+
+    async function idbLoadConfig() {
+      try {
+        const db = await openDB();
+        return new Promise((resolve) => {
+          const tx = db.transaction(STORE_NAME, 'readonly');
+          const store = tx.objectStore(STORE_NAME);
+          const req = store.get('config');
+          req.onsuccess = (e) => {
+            if (e.target.result) {
+              resolve(e.target.result);
+            } else {
+              // 初回のみ既存のlocalStorageから移行
+              const local = localStorage.getItem('tc_config');
+              if (local) {
+                try { resolve(JSON.parse(local)); } catch (err) { resolve(null); }
+              } else {
+                resolve(null);
+              }
+            }
+          };
+          req.onerror = () => resolve(null);
+        });
+      } catch (err) {
+        console.warn('IndexedDB load fallback:', err);
+        const local = localStorage.getItem('tc_config');
+        if (local) {
+          try { return JSON.parse(local); } catch (e) { return null; }
+        }
+        return null;
+      }
+    }
+
     // =================================================================
     // 1. Plus Code 完全デコーダー
     // =================================================================
     const OLC_ALPHABET = "23456789CFGHJMPQRVWX";
-
     const JAPAN_PREFIXES = [
       "8Q7X", "8Q7W", "8Q8X", "8Q63", "8Q62", "8Q52", "8R9V", "8VC6", "8Q3P"
     ];
@@ -378,6 +526,7 @@
     let config = {
       timeLimitMinutes: 20,
       thresholdDistance: 25,
+      firebaseDbUrl: "",
       targets: JSON.parse(JSON.stringify(DEFAULT_TARGETS))
     };
 
@@ -402,16 +551,15 @@
       skipCount: 0
     };
 
-    // お題別インラインLeafletマップのインスタンス管理オブジェクト: { [idx]: { map, marker } }
     let targetMaps = {};
 
     // =================================================================
-    // 3. アプリ起動とGPS常時監視
+    // 3. アプリ起動とGPS常時監視 (IndexedDBから非同期ロード)
     // =================================================================
-    window.addEventListener('DOMContentLoaded', () => {
-      const savedConfig = localStorage.getItem('tc_config');
+    window.addEventListener('DOMContentLoaded', async () => {
+      const savedConfig = await idbLoadConfig();
       if (savedConfig) {
-        try { config = JSON.parse(savedConfig); } catch (e) {}
+        config = Object.assign(config, savedConfig);
       }
       updateStartScreenDisplay();
       startContinuousGPSTracking();
@@ -472,7 +620,7 @@
     // =================================================================
     function startGame() {
       if (config.targets.length === 0) {
-        alert("お題が登録されていません。GM設定からお題を追加してください。");
+        alert("お題が登録されていません。GM設定からお題を追加するか、合言葉でお題を受信してください。");
         return;
       }
 
@@ -724,9 +872,9 @@
     function openGMModal() {
       document.getElementById('gm-input-time').value = config.timeLimitMinutes;
       document.getElementById('gm-input-dist').value = config.thresholdDistance;
+      document.getElementById('cfg-firebase-dburl').value = config.firebaseDbUrl || "";
       document.getElementById('modal-gm').classList.remove('hidden');
       renderGMTargetList();
-      // モーダル表示のアニメーション完了後に地図を初期化
       setTimeout(() => {
         initAllTargetMaps();
       }, 100);
@@ -853,7 +1001,6 @@
         container.appendChild(card);
       });
 
-      // DOM生成完了後にLeaflet地図を初期化
       setTimeout(() => {
         initAllTargetMaps();
       }, 100);
@@ -878,7 +1025,6 @@
         const container = document.getElementById(`target-map-${idx}`);
         if (!container) return;
 
-        // すでに初期化済みの場合はサイズ再計算のみ
         if (targetMaps[idx] && targetMaps[idx].map) {
           targetMaps[idx].map.invalidateSize();
           return;
@@ -894,7 +1040,7 @@
         try {
           const map = L.map(container, {
             zoomControl: true,
-            scrollWheelZoom: false // 誤操作によるズームを防ぐ
+            scrollWheelZoom: false
           }).setView([lat, lng], 16);
 
           L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -904,13 +1050,11 @@
 
           const marker = L.marker([lat, lng], { draggable: true }).addTo(map);
 
-          // ピンをドラッグして離したとき
           marker.on('dragend', (e) => {
             const pos = e.target.getLatLng();
             updateTargetCoordsFromMap(idx, pos.lat, pos.lng);
           });
 
-          // 地図上の任意の場所をタップしたとき
           map.on('click', (e) => {
             marker.setLatLng(e.latlng);
             updateTargetCoordsFromMap(idx, e.latlng.lat, e.latlng.lng);
@@ -999,7 +1143,6 @@
         if (latInput) latInput.value = decoded.lat;
         if (lngInput) lngInput.value = decoded.lng;
 
-        // 地図のピンと中心も同期
         if (targetMaps[targetIdx]) {
           targetMaps[targetIdx].map.setView([decoded.lat, decoded.lng], 16);
           targetMaps[targetIdx].marker.setLatLng([decoded.lat, decoded.lng]);
@@ -1084,7 +1227,6 @@
     function updateTargetField(idx, field, val) {
       config.targets[idx][field] = val;
 
-      // 緯度・経度の手動入力時に地図のピンを追従
       if ((field === 'lat' || field === 'lng') && targetMaps[idx]) {
         const lat = config.targets[idx].lat;
         const lng = config.targets[idx].lng;
@@ -1114,30 +1256,25 @@
       }
     }
 
-    function saveGMSettings() {
+    // IndexedDBへ安全に保存（容量上限を気にせず大量の写真・お題を保存可能）
+    async function saveGMSettings() {
       const btn = document.getElementById('btn-save-gm-settings');
       btn.innerText = "💾 保存中...";
 
-      setTimeout(() => {
-        try {
-          config.timeLimitMinutes = parseInt(document.getElementById('gm-input-time').value) || 20;
-          config.thresholdDistance = parseInt(document.getElementById('gm-input-dist').value) || 25;
-          
-          localStorage.setItem('tc_config', JSON.stringify(config));
-          updateStartScreenDisplay();
-          closeGMModal();
-          alert("設定を保存しました！");
-        } catch (err) {
-          console.error("Save error:", err);
-          if (err.name === 'QuotaExceededError' || err.code === 22) {
-            alert("画像データが多いためブラウザの保存上限を超えました。一度『JSONを書き出す』で保存するか、お題数を調整してください。");
-          } else {
-            alert("設定の保存に失敗しました: " + err.message);
-          }
-        } finally {
-          btn.innerText = "💾 設定を保存して閉じる";
-        }
-      }, 50);
+      try {
+        config.timeLimitMinutes = parseInt(document.getElementById('gm-input-time').value) || 20;
+        config.thresholdDistance = parseInt(document.getElementById('gm-input-dist').value) || 25;
+        
+        await idbSaveConfig(config);
+        updateStartScreenDisplay();
+        closeGMModal();
+        alert("設定とお題（写真含む）を端末内データベース(IndexedDB)に保存しました！");
+      } catch (err) {
+        console.error("Save error:", err);
+        alert("設定の保存に失敗しました: " + err.message);
+      } finally {
+        btn.innerText = "💾 設定を保存して閉じる";
+      }
     }
 
     function exportDataJSON() {
@@ -1154,10 +1291,10 @@
       const file = event.target.files[0];
       if (!file) return;
       const reader = new FileReader();
-      reader.onload = (e) => {
+      reader.onload = async (e) => {
         try {
           config = JSON.parse(e.target.result);
-          localStorage.setItem('tc_config', JSON.stringify(config));
+          await idbSaveConfig(config);
           renderGMTargetList();
           updateStartScreenDisplay();
           alert("お題データを正常に読み込みました！");
@@ -1166,6 +1303,146 @@
         }
       };
       reader.readAsText(file);
+    }
+
+    // =================================================================
+    // 8. 方式B：クラウド同期＆合言葉（4桁コード）発行・受信処理
+    // =================================================================
+    function toggleFirebaseConfigUI() {
+      const area = document.getElementById('gm-firebase-config-area');
+      area.classList.toggle('hidden');
+    }
+
+    async function saveFirebaseConfig() {
+      const dbUrl = document.getElementById('cfg-firebase-dburl').value.trim();
+      config.firebaseDbUrl = dbUrl;
+      await idbSaveConfig(config);
+      alert("Firebase接続URLを保存しました！");
+      toggleFirebaseConfigUI();
+    }
+
+    // 4桁コードの発行（GM側）
+    async function publishRoomCode() {
+      const dbUrl = (config.firebaseDbUrl || "").replace(/\/$/, "");
+      if (!dbUrl) {
+        alert("クラウド同期を利用するには、Firebase Realtime Database のURLが必要です。\n\n『⚙️ 接続設定』を開いてURLを入力してください。\n（※オフラインの場合は下の『JSONを書き出す』でAirDrop/LINE共有も可能です）");
+        document.getElementById('gm-firebase-config-area').classList.remove('hidden');
+        return;
+      }
+
+      const btn = document.getElementById('btn-publish-room');
+      btn.disabled = true;
+      btn.innerText = "📡 クラウドへアップロード中...";
+
+      // 4桁の合言葉コードをランダム生成 (1000〜9999)
+      const roomCode = Math.floor(1000 + Math.random() * 9000).toString();
+
+      try {
+        const endpoint = `${dbUrl}/rooms/${roomCode}.json`;
+        const payload = {
+          timeLimitMinutes: config.timeLimitMinutes,
+          thresholdDistance: config.thresholdDistance,
+          targets: config.targets,
+          createdAt: Date.now()
+        };
+
+        const res = await fetch(endpoint, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}: データベースへの保存に失敗しました。Databaseのセキュリティルール(read/write: true)を確認してください。`);
+        }
+
+        // 発行コードの表示
+        document.getElementById('gm-room-code-display').innerText = roomCode;
+        document.getElementById('gm-room-card').classList.remove('hidden');
+        alert(`合言葉【 ${roomCode} 】を発行しました！\n参加者にこの4桁を伝えてください。`);
+      } catch (err) {
+        console.error("Publish error:", err);
+        alert("クラウドへの発行に失敗しました:\n" + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerText = "🚀 部屋を作成して合言葉を発行";
+      }
+    }
+
+    // 参加者側：合言葉受信モーダルの開閉
+    function openJoinModal() {
+      document.getElementById('join-room-code').value = '';
+      document.getElementById('join-status-msg').classList.add('hidden');
+      document.getElementById('modal-join').classList.remove('hidden');
+    }
+
+    function closeJoinModal() {
+      document.getElementById('modal-join').classList.add('hidden');
+    }
+
+    // 参加者側：合言葉からお題データをダウンロード
+    async function downloadGameFromRoom() {
+      const roomCode = document.getElementById('join-room-code').value.trim();
+      const statusEl = document.getElementById('join-status-msg');
+      const submitBtn = document.getElementById('btn-submit-join');
+
+      if (!/^\d{4}$/.test(roomCode)) {
+        statusEl.className = "p-2.5 rounded-xl text-xs font-bold text-center border bg-red-100 text-red-900 border-red-300";
+        statusEl.innerText = "4桁の数字を入力してください。";
+        statusEl.classList.remove('hidden');
+        return;
+      }
+
+      const dbUrl = (config.firebaseDbUrl || "").replace(/\/$/, "");
+      if (!dbUrl) {
+        statusEl.className = "p-2.5 rounded-xl text-xs font-bold text-center border bg-amber-100 text-amber-900 border-amber-300";
+        statusEl.innerText = "接続先URLが未設定です。GM設定の『接続設定』でURLを入力してください。";
+        statusEl.classList.remove('hidden');
+        return;
+      }
+
+      submitBtn.disabled = true;
+      submitBtn.innerText = "受信中...";
+      statusEl.className = "p-2.5 rounded-xl text-xs font-bold text-center border bg-stone-100 text-stone-700 border-stone-300";
+      statusEl.innerText = `部屋コード ${roomCode} からお題を取得中...`;
+      statusEl.classList.remove('hidden');
+
+      try {
+        const endpoint = `${dbUrl}/rooms/${roomCode}.json`;
+        const res = await fetch(endpoint);
+
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+
+        if (!data || !data.targets) {
+          throw new Error("指定された合言葉の部屋が見つからないか、期限切れです。");
+        }
+
+        // 取得したデータを反映
+        config.timeLimitMinutes = data.timeLimitMinutes || 20;
+        config.thresholdDistance = data.thresholdDistance || 25;
+        config.targets = data.targets;
+
+        // IndexedDBに永続保存
+        await idbSaveConfig(config);
+
+        updateStartScreenDisplay();
+        statusEl.className = "p-2.5 rounded-xl text-xs font-bold text-center border bg-emerald-100 text-emerald-900 border-emerald-400";
+        statusEl.innerText = `🎉 成功！お題 ${config.targets.length}問を受信しました！`;
+
+        setTimeout(() => {
+          closeJoinModal();
+          alert(`お題データ（全${config.targets.length}問・写真含む）を受信しました！\n探索を開始できます。`);
+        }, 1200);
+
+      } catch (err) {
+        console.error("Join room error:", err);
+        statusEl.className = "p-2.5 rounded-xl text-xs font-bold text-center border bg-red-100 text-red-900 border-red-300";
+        statusEl.innerText = "取得に失敗しました: " + (err.message || "通信エラー");
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerText = "📥 受信する";
+      }
     }
   </script>
 </body>
