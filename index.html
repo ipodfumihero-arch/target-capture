@@ -11,7 +11,6 @@
   <style>
     button { touch-action: manipulation; }
     .no-select { user-select: none; -webkit-user-select: none; }
-    /* 直射日光下での反射防止・屋外マット質感 */
     body {
       background-color: #FAF7EE;
     }
@@ -76,7 +75,7 @@
         </div>
       </div>
 
-      <!-- 探索開始ボタン（ペールトーン緑） -->
+      <!-- 探索開始ボタン -->
       <button id="btn-start-game" onclick="startGame()" class="w-full py-4 bg-[#4D7C5D] hover:bg-[#3F684D] active:scale-95 text-white font-black text-xl rounded-2xl shadow-md transition transform">
         🚀 探索を開始する
       </button>
@@ -127,14 +126,13 @@
 
       <!-- アクション・GPS判定 -->
       <div class="space-y-2 pt-1">
-        <!-- 決定ボタン（ペールトーン緑） -->
         <button id="btn-check-gps" onclick="checkCurrentLocation()" class="w-full py-3.5 bg-[#4D7C5D] hover:bg-[#3F684D] active:scale-98 text-white font-black text-lg rounded-2xl shadow-md transition flex items-center justify-center space-x-2">
           <span>📍 ここで現在地判定！</span>
         </button>
 
         <div id="game-feedback" class="hidden p-2.5 rounded-xl text-xs text-center font-bold border transition"></div>
 
-        <!-- スキップ ＆ 中断ボタン（ペールトーンオレンジ系） -->
+        <!-- スキップ ＆ 中断ボタン -->
         <div class="flex space-x-2">
           <button onclick="skipTarget()" class="flex-1 py-2 bg-[#FFFDF7] hover:bg-stone-100 active:bg-stone-200 text-stone-700 rounded-xl text-xs font-bold border border-stone-300 shadow-sm transition flex items-center justify-center space-x-1">
             <span>⏭️</span><span>スキップ (0pt)</span>
@@ -295,8 +293,7 @@
       const match = inputStr.toUpperCase().match(/([23456789CFGHJMPQRVWX]{4,8})\+([23456789CFGHJMPQRVWX]{2,3})/);
       if (!match) return null;
 
-      const part1 = match;
-      const part2 = match[2];
+      const [fullMatch, part1, part2] = match;
 
       if (part1.length >= 8) {
         const res = decodeFullCode(part1 + part2);
@@ -515,13 +512,7 @@
 
       gameState.currentHintLevel = 1;
       gameState.activeViewHintLevel = 1;
-      gameState.levelCurrentPoints = {
-        1: BASE_POINTS,
-        2: BASE_POINTS[2],
-        3: BASE_POINTS[3],
-        4: BASE_POINTS[4],
-        5: BASE_POINTS[5]
-      };
+      gameState.levelCurrentPoints = Object.assign({}, BASE_POINTS);
 
       document.getElementById('game-target-progress').innerText = `${gameState.currentTargetIndex + 1} / ${config.targets.length}`;
       document.getElementById('game-score').innerText = `${gameState.totalScore} pt`;
@@ -733,6 +724,43 @@
       document.getElementById('modal-gm').classList.add('hidden');
     }
 
+    function renderPreviewSlots(t, idx) {
+      let html = '';
+      for (let imgIdx = 0; imgIdx < 5; imgIdx++) {
+        const imgSrc = (t.images && t.images[imgIdx]) ? t.images[imgIdx] : '';
+        const hasImg = Boolean(imgSrc);
+        html += `
+          <div class="flex flex-col items-center space-y-0.5">
+            <span class="text-[8px] text-stone-600 font-bold">Lv ${imgIdx + 1}</span>
+            <div class="w-full aspect-square bg-stone-200 rounded border border-stone-300 overflow-hidden flex items-center justify-center">
+              <img id="preview-${idx}-${imgIdx}" src="${imgSrc}" alt="Lv${imgIdx + 1}" class="w-full h-full object-cover ${hasImg ? '' : 'hidden'}">
+              <span id="placeholder-${idx}-${imgIdx}" class="text-[8px] text-stone-400 ${hasImg ? 'hidden' : ''}">No img</span>
+            </div>
+          </div>
+        `;
+      }
+      return html;
+    }
+
+    function renderImageInputRows(t, idx) {
+      let html = '';
+      for (let imgIdx = 0; imgIdx < 5; imgIdx++) {
+        const imgSrc = (t.images && t.images[imgIdx]) ? t.images[imgIdx] : '';
+        const displayVal = (imgSrc && imgSrc.startsWith('data:image')) ? '[写真ライブラリの画像]' : imgSrc;
+        html += `
+          <div class="flex items-center space-x-1">
+            <span class="w-6 text-[9px] font-bold text-stone-700 shrink-0">Lv ${imgIdx + 1}:</span>
+            <input type="text" id="gm-img-input-${idx}-${imgIdx}" placeholder="画像URLまたは右から選択" value="${displayVal}" oninput="updateTargetImageURL(${idx}, ${imgIdx}, this.value)" class="flex-1 bg-white border border-stone-300 rounded px-1.5 py-0.5 text-[10px] text-stone-800">
+            <label class="px-2 py-1 bg-stone-200 hover:bg-stone-300 active:bg-stone-400 border border-stone-300 rounded text-[10px] text-stone-700 cursor-pointer shrink-0 font-bold">
+              📁 選択
+              <input type="file" accept="image/*" onchange="handleImageFileUpload(event, ${idx}, ${imgIdx})" class="hidden">
+            </label>
+          </div>
+        `;
+      }
+      return html;
+    }
+
     function renderGMTargetList() {
       const container = document.getElementById('gm-target-list');
       document.getElementById('gm-target-count').innerText = config.targets.length;
@@ -787,30 +815,11 @@
           <!-- 5段階ヒント画像とプレビュー -->
           <div class="space-y-1.5">
             <label class="block text-[10px] text-stone-700 font-semibold">📸 ヒント写真 (Lv1〜5)</label>
-            
             <div class="grid grid-cols-5 gap-1 bg-stone-100 p-1.5 rounded-lg border border-stone-200">
-              ${.map(imgIdx => `
-                <div class="flex flex-col items-center space-y-0.5">
-                  <span class="text-[8px] text-stone-600 font-bold">Lv ${imgIdx + 1}</span>
-                  <div class="w-full aspect-square bg-stone-200 rounded border border-stone-300 overflow-hidden flex items-center justify-center">
-                    <img id="preview-${idx}-${imgIdx}" src="${t.images[imgIdx] || ''}" alt="Lv${imgIdx+1}" class="w-full h-full object-cover ${t.images[imgIdx] ? '' : 'hidden'}">
-                    <span id="placeholder-${idx}-${imgIdx}" class="text-[8px] text-stone-400 ${t.images[imgIdx] ? 'hidden' : ''}">No img</span>
-                  </div>
-                </div>
-              `).join('')}
+              ${renderPreviewSlots(t, idx)}
             </div>
-
             <div class="space-y-1 pt-0.5">
-              ${.map(imgIdx => `
-                <div class="flex items-center space-x-1">
-                  <span class="w-6 text-[9px] font-bold text-stone-700 shrink-0">Lv ${imgIdx+1}:</span>
-                  <input type="text" id="gm-img-input-${idx}-${imgIdx}" placeholder="画像URLまたは右から選択" value="${t.images[imgIdx] && t.images[imgIdx].startsWith('data:image') ? '[写真ライブラリの画像]' : (t.images[imgIdx] || '')}" oninput="updateTargetImageURL(${idx}, ${imgIdx}, this.value)" class="flex-1 bg-white border border-stone-300 rounded px-1.5 py-0.5 text-[10px] text-stone-800">
-                  <label class="px-2 py-1 bg-stone-200 hover:bg-stone-300 active:bg-stone-400 border border-stone-300 rounded text-[10px] text-stone-700 cursor-pointer shrink-0 font-bold">
-                    📁 選択
-                    <input type="file" accept="image/*" onchange="handleImageFileUpload(event, ${idx}, ${imgIdx})" class="hidden">
-                  </label>
-                </div>
-              `).join('')}
+              ${renderImageInputRows(t, idx)}
             </div>
           </div>
         `;
